@@ -1,10 +1,16 @@
 // Copyright 2022 Chris Hoage (@chrishoage)
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "action.h"
+#include "modifiers.h"
 #include QMK_KEYBOARD_H
 
 enum chrishoage_keycodes {
     KM_TOG = QK_USER_0,
+    KM_LCTL,
+    KM_LGUI,
+    KM_RCTL,
+    KM_RGUI,
 };
 
 // Double tap TD(0) to enter bootloader
@@ -15,7 +21,7 @@ static void enter_qk_boot(tap_dance_state_t *state, void *user_data) {
     }
 }
 
-enum SpleebLayer { _BASE = 0, _FN, _MOUSE };
+enum SpleebLayer { _BASE = 0, _FN, _MOUSE, _TEMPLATE };
 
 tap_dance_action_t tap_dance_actions[] = {[0] = ACTION_TAP_DANCE_FN(enter_qk_boot)};
 
@@ -27,7 +33,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
          KC_TAB,    KC_Q,    KC_W,    KC_E,    KC_R,    KC_T, KC_MINS,                                           KC_EQL,    KC_Y,    KC_U,    KC_I,   KC_O,    KC_P, KC_QUOT,
         KC_LSFT,    KC_A,    KC_S,    KC_D,    KC_F,    KC_G, KC_LBRC,                                          KC_RBRC,    KC_H,    KC_J,    KC_K,   KC_L, KC_SCLN, KC_RSFT,
                     KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,          KC_MUTE,                        ENC_STR,             KC_N,    KC_M, KC_COMM, KC_DOT, KC_SLSH,
-                                            KC_LCTL, KC_LALT, KC_LGUI,  KC_ENT,   MO(1),        MO(1),  KC_SPC, KC_RGUI, KC_RALT, KC_RCTL
+                                            KM_LCTL, KC_LALT, KM_LGUI,  KC_ENT,   MO(_FN),        MO(_FN),  KC_SPC, KM_RGUI, KC_RALT, KM_RCTL
     ),
 
 	[_FN] = LAYOUT(
@@ -45,28 +51,48 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
                  KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_BTN3,          KC_TRNS,                         KC_TRNS,          KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
                                             KC_TRNS, KC_TRNS, KC_TRNS, KC_BTN1, KC_BTN2,       KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS
     ),
+
+	[_TEMPLATE] = LAYOUT(
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,                                           KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,                                           KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,                                           KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+                 KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,          KC_TRNS,                         KC_TRNS,          KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,
+                                            KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,       KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS
+    ),
 };
 // clang-format on
 
+bool           km_ctl       = false;
+bool           km_gui       = false;
+static uint8_t cur_kvm_head = 0;
+
 bool encoder_update_user(uint8_t index, bool clockwise) {
-    if (get_mods() & MOD_MASK_GUI) {
+    uint8_t mods = get_mods();
+    if (km_gui) {
         // When GUI is held trigger [ ] to move workspaces
         tap_code(clockwise ? KC_RBRC : KC_LBRC);
         return false;
     }
 
-    if (get_mods() & MOD_MASK_CTRL) {
+    if (km_ctl) {
+        clear_mods();
+        if (mods & MOD_MASK_SHIFT) {
+            register_mods(MOD_MASK_SHIFT);
+        }
         // When CTRL is hled trigger page up/down to move tabs (Firefox, VSCode)
-        tap_code(clockwise ? KC_PGDN : KC_PGUP);
+        if (cur_kvm_head == 0) {
+            tap_code16(LCTL(clockwise ? KC_PGDN : KC_PGUP));
+        } else {
+            tap_code16(LALT(LGUI(clockwise ? KC_RGHT : KC_LEFT)));
+        }
+        set_mods(mods);
         return false;
     }
-
-    if (get_mods() & MOD_MASK_ALT) {
+    if (mods & MOD_MASK_ALT) {
         // When ALT is held trigger up/down to move line up/down
         tap_code(clockwise ? KC_DOWN : KC_UP);
         return false;
     }
-
     // Defer to encoder_update_kb to trigger spleeb_encoder_mode_trigger
     return true;
 }
@@ -138,8 +164,6 @@ uint32_t restore_nkro_state(uint32_t trigger_time, void *cb_arg) {
 #define KVM_SEL_START KC_1
 #define KVM_HEAD_COUNT 2
 
-static uint8_t cur_kvm_head = 0;
-
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case KM_TOG:
@@ -148,6 +172,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 cur_kvm_head     = (cur_kvm_head + 1) % KVM_HEAD_COUNT;
 
                 clear_keyboard();
+                layer_clear();
                 keymap_config.nkro = false;
 
                 tap_code(KVM_LEADER);
@@ -159,6 +184,52 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 defer_exec(500, restore_nkro_state, NULL);
                 return false;
             }
+            break;
+        case KM_LCTL: {
+            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_LCTL) : MOD_BIT(KC_LGUI);
+            km_ctl      = record->event.pressed;
+            if (record->event.pressed) {
+                register_mods(mod);
+            } else {
+                unregister_mods(mod);
+            }
+            return false;
+            break;
+        }
+        case KM_LGUI: {
+            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_LGUI) : MOD_BIT(KC_LCTL);
+            km_gui      = record->event.pressed;
+            if (record->event.pressed) {
+                register_mods(mod);
+            } else {
+                unregister_mods(mod);
+            }
+            return false;
+            break;
+        }
+        case KM_RCTL: {
+            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_RCTL) : MOD_BIT(KC_RGUI);
+            km_ctl      = record->event.pressed;
+            if (record->event.pressed) {
+                register_mods(mod);
+            } else {
+                unregister_mods(mod);
+            }
+
+            return false;
+            break;
+        }
+        case KM_RGUI: {
+            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_RGUI) : MOD_BIT(KC_RCTL);
+            km_gui      = record->event.pressed;
+            if (record->event.pressed) {
+                register_mods(mod);
+            } else {
+                unregister_mods(mod);
+            }
+            return false;
+            break;
+        }
     }
     return true;
 }
