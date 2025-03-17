@@ -17,15 +17,39 @@
  */
 #include QMK_KEYBOARD_H
 
+enum chrishoage_ploopy_keycodes {
+    LK_BTN5 = QK_USER_0,
+};
+
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [0] = LAYOUT(
-        KC_WWW_BACK,    OSL(1), KC_BTN3,   DRAG_SCROLL,
+        KC_BTN4,    OSL(1), KC_BTN3,            KC_BTN5,
         KC_BTN1,                                KC_BTN2
     ),
     [1] = LAYOUT(
-        DPI_CONFIG,    KC_NO, KC_NO,   DRAG_SCROLL_LOCK,
-        KC_NO,                                KC_NO
+        DPI_CONFIG,    KC_NO, KC_NO,            LK_BTN5,
+        QK_BOOT,                                QK_RBT
     )
 };
 // clang-format on
+
+bool drag_scroll_lock = false;
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    switch (keycode) {
+        case LK_BTN5:
+            if (record->event.pressed) {
+                drag_scroll_lock = !drag_scroll_lock;
+            }
+
+            if (drag_scroll_lock) {
+                register_code(KC_BTN5);
+            } else {
+                unregister_code(KC_BTN5);
+            }
+
+            return false;
+    }
+    return true;
+}
