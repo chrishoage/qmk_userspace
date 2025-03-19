@@ -80,11 +80,7 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
             register_mods(MOD_MASK_SHIFT);
         }
         // When CTRL is hled trigger page up/down to move tabs (Firefox, VSCode)
-        if (cur_kvm_head == 0) {
-            tap_code16(LCTL(clockwise ? KC_PGDN : KC_PGUP));
-        } else {
-            tap_code16(LALT(LGUI(clockwise ? KC_RGHT : KC_LEFT)));
-        }
+        tap_code16(LCTL(clockwise ? KC_PGDN : KC_PGUP));
         set_mods(mods);
         return false;
     }
