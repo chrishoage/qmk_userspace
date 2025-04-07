@@ -3,10 +3,11 @@
 
 #include "action.h"
 #include "modifiers.h"
+#include "os_detection.h"
+#include "report.h"
 #include QMK_KEYBOARD_H
 
 enum chrishoage_keycodes {
-    KM_TOG = QK_USER_0,
     KM_LCTL,
     KM_LGUI,
     KM_RCTL,
@@ -38,7 +39,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 	[_FN] = LAYOUT(
         KC_PAUS,   KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,  KC_ESC,                                           KC_DEL,   KC_F6,   KC_F7,   KC_F8,   KC_F9,  KC_F10, KC_PSCR,
-        KM_TOG, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,                                          KC_TRNS, KC_HOME, KC_PGDN, KC_PGUP,  KC_END, KC_TRNS, KC_TRNS,
+        KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,                                          KC_TRNS, KC_HOME, KC_PGDN, KC_PGUP,  KC_END, KC_TRNS, KC_TRNS,
         KC_CAPS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,                                          KC_TRNS, KC_LEFT, KC_DOWN,   KC_UP, KC_RGHT, KC_TRNS,  QK_RBT,
                  KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,          ENC_STL,                        KC_TRNS,          KC_TRNS, KC_TRNS, KC_TRNS, KC_TRNS,   TD(0),
                                             KC_TRNS, KC_TRNS, KC_TRNS,  KC_SPC, KC_TRNS,      KC_TRNS,  KC_ENT, KC_TRNS, KC_TRNS, KC_TRNS
@@ -62,9 +63,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 // clang-format on
 
-bool           km_ctl       = false;
-bool           km_gui       = false;
-static uint8_t cur_kvm_head = 0;
+bool km_ctl = false;
+bool km_gui = false;
 
 bool encoder_update_user(uint8_t index, bool clockwise) {
     uint8_t mods = get_mods();
@@ -147,42 +147,18 @@ void pointing_device_init_user(void) {
     set_auto_mouse_layer(_MOUSE);
 }
 
-bool saved_nkro_state;
-
-uint32_t restore_nkro_state(uint32_t trigger_time, void *cb_arg) {
-    clear_keyboard();
-    keymap_config.nkro = saved_nkro_state;
-
-    return 0;
+report_mouse_t pointing_device_task_user(report_mouse_t mouse_report) {
+    if (detected_host_os() == OS_MACOS) {
+        mouse_report.h = -mouse_report.h;
+        mouse_report.v = -mouse_report.v;
+    }
+    return mouse_report;
 }
-
-#define KVM_LEADER KC_SCROLL_LOCK
-#define KVM_SEL_START KC_1
-#define KVM_HEAD_COUNT 2
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
-        case KM_TOG:
-            if (record->event.pressed) {
-                saved_nkro_state = keymap_config.nkro;
-                cur_kvm_head     = (cur_kvm_head + 1) % KVM_HEAD_COUNT;
-
-                clear_keyboard();
-                layer_clear();
-                keymap_config.nkro = false;
-
-                tap_code(KVM_LEADER);
-                wait_ms(10);
-                tap_code(KVM_LEADER);
-                wait_ms(10);
-                tap_code(KVM_SEL_START + cur_kvm_head);
-                wait_ms(500);
-                defer_exec(500, restore_nkro_state, NULL);
-                return false;
-            }
-            break;
         case KM_LCTL: {
-            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_LCTL) : MOD_BIT(KC_LGUI);
+            uint8_t mod = detected_host_os() != OS_MACOS ? MOD_BIT(KC_LCTL) : MOD_BIT(KC_LGUI);
             km_ctl      = record->event.pressed;
             if (record->event.pressed) {
                 register_mods(mod);
@@ -193,7 +169,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             break;
         }
         case KM_LGUI: {
-            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_LGUI) : MOD_BIT(KC_LCTL);
+            uint8_t mod = detected_host_os() != OS_MACOS ? MOD_BIT(KC_LGUI) : MOD_BIT(KC_LCTL);
             km_gui      = record->event.pressed;
             if (record->event.pressed) {
                 register_mods(mod);
@@ -204,7 +180,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             break;
         }
         case KM_RCTL: {
-            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_RCTL) : MOD_BIT(KC_RGUI);
+            uint8_t mod = detected_host_os() != OS_MACOS ? MOD_BIT(KC_RCTL) : MOD_BIT(KC_RGUI);
             km_ctl      = record->event.pressed;
             if (record->event.pressed) {
                 register_mods(mod);
@@ -216,7 +192,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             break;
         }
         case KM_RGUI: {
-            uint8_t mod = cur_kvm_head == 0 ? MOD_BIT(KC_RGUI) : MOD_BIT(KC_RCTL);
+            uint8_t mod = detected_host_os() != OS_MACOS ? MOD_BIT(KC_RGUI) : MOD_BIT(KC_RCTL);
             km_gui      = record->event.pressed;
             if (record->event.pressed) {
                 register_mods(mod);
