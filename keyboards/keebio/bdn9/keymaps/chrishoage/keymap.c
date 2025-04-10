@@ -13,7 +13,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "quantum.h"
 #include "rgb_matrix/rgb_matrix.h"
 #include QMK_KEYBOARD_H
 
@@ -30,11 +29,52 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     ),
     [1] = LAYOUT(
         QK_BOOT, RM_TOGG, KC_TRNS,
-        KC_TRNS, RM_VALU, RM_VALD,
+        TG(0)  , RM_VALU, RM_VALD,
         KC_F14 , KC_F13 , KC_F16
     ),
     // clang-format on
 };
+
+void keyboard_post_init_user() {
+    rgblight_disable_noeeprom();
+    rgb_matrix_mode_noeeprom(RGB_MATRIX_CYCLE_PINWHEEL);
+    rgb_matrix_disable_noeeprom();
+}
+
+bool rgb_matrix_indicators_advanced_user(uint8_t led_min, uint8_t led_max) {
+    switch (get_highest_layer(layer_state)) {
+        case 1:
+            for (uint8_t i = led_min; i < led_max; i++) {
+                if (g_led_config.flags[i] & LED_FLAG_KEYLIGHT) {
+                    if (i == g_led_config.matrix_co[1][0]) {
+                        rgb_matrix_set_color(i, RGB_PINK);
+                    } else {
+                        rgb_matrix_set_color(i, RGB_OFF);
+                    }
+                }
+            }
+            break;
+    }
+    return true;
+}
+
+bool          last_enabled = false;
+layer_state_t layer_state_set_user(layer_state_t state) {
+    switch (get_highest_layer(state)) {
+        case 1:
+            last_enabled = rgb_matrix_is_enabled();
+            rgb_matrix_enable_noeeprom();
+            break;
+        default:
+            if (last_enabled) {
+                rgb_matrix_enable_noeeprom();
+            } else {
+                rgb_matrix_disable_noeeprom();
+            }
+            break;
+    }
+    return state;
+}
 
 bool encoder_update_user(uint8_t index, bool clockwise) {
     switch (get_highest_layer(layer_state)) {
